@@ -145,21 +145,57 @@ final class ConventionAnnotationImpl implements Convention {
                 throw creatorExecutable.getError(clazz, "All parameters must be annotated with a @BsonProperty in %s");
             }
             for (int i = 0; i < properties.size(); i++) {
-                BsonProperty bsonProperty = properties.get(i);
+                // BsonId may be missing, and thus creatorExecutable.getIdPropertyIndex() may be null.
+                boolean isIdProperty = Integer.valueOf(i).equals(creatorExecutable.getIdPropertyIndex());
                 Class<?> parameterType = parameterTypes.get(i);
                 Type genericType = parameterGenericTypes.get(i);
-                PropertyModelBuilder<Object> propertyModelBuilder =
-                        (PropertyModelBuilder<Object>) classModelBuilder.getProperty(bsonProperty.value());
-                if (propertyModelBuilder == null) {
-                    addCreatorPropertyToClassModelBuilder(classModelBuilder, bsonProperty.value(), parameterType);
-                } else if (parameterType.isAssignableFrom(propertyModelBuilder.getTypeData().getType())) {
+                PropertyModelBuilder<?> propertyModelBuilder = null;
+
+                if (isIdProperty) {
+                    // This handles the BsonId annotation on the BsonCreator parameter.
+                    propertyModelBuilder = classModelBuilder.getProperty(classModelBuilder.getIdPropertyName());
+                } else {
+                    BsonProperty bsonProperty = properties.get(i);
+
+                    // Find the property using write name and falls back to read name
+                    for (PropertyModelBuilder<?> builder : classModelBuilder.getPropertyModelBuilders()) {
+                        if (bsonProperty.value().equals(builder.getWriteName())) {
+                            // When there is a property that matches the write name of the parameter, use it and stop looking
+                            propertyModelBuilder = builder;
+                            break;
+                        }
+
+                        if (bsonProperty.value().equals(builder.getReadName())) {
+                            // When there is a property that matches the read name of the parameter, save it but continue to look
+                            // This is so just in case there is another property that matches the write name.
+                            propertyModelBuilder = builder;
+                        }
+                    }
+
+                    if (propertyModelBuilder == null) {
+                        // BsonProperty value should be the BSON property name (write name). However, in legacy, when BsonProperty is used
+                        // in BsonCreator parameters, it is mapped to the actual POJO property name (e.g. method name or field name).
+                        // To support it, we still need to look it up.
+                        propertyModelBuilder = classModelBuilder.getProperty(bsonProperty.value());
+                    }
+
+                    if (propertyModelBuilder == null) {
+                        propertyModelBuilder = addCreatorPropertyToClassModelBuilder(classModelBuilder, bsonProperty.value(),
+                            parameterType);
+                    } else {
+                        // An existing property is found, set its write name
+                        propertyModelBuilder.writeName(bsonProperty.value());
+                    }
+                }
+
+                if (!propertyModelBuilder.getTypeData().isAssignableFrom(parameterType)) {
+                    throw creatorExecutable.getError(clazz, format("Invalid Property type for '%s'. Expected %s, found %s.",
+                        propertyModelBuilder.getWriteName(), propertyModelBuilder.getTypeData().getType(), parameterType));
+                } else {
                     // The existing getter for this field returns a more specific type than what the constructor accepts
                     // This is typical when the getter returns a specific subtype, but the constructor accepts a more
                     // general one (e.g.: getter returns ImmutableList<T>, while constructor just accepts List<T>)
                     propertyModelBuilder.typeData(newTypeData(genericType, parameterType));
-                } else if (!propertyModelBuilder.getTypeData().isAssignableFrom(parameterType)) {
-                    throw creatorExecutable.getError(clazz, format("Invalid Property type for '%s'. Expected %s, found %s.",
-                            bsonProperty.value(), propertyModelBuilder.getTypeData().getType(), parameterType));
                 }
             }
             classModelBuilder.instanceCreatorFactory(new InstanceCreatorFactoryImpl<T>(creatorExecutable));
@@ -171,10 +207,13 @@ final class ConventionAnnotationImpl implements Convention {
         return TypeData.newInstance(genericType, (Class<T>) clazz);
     }
 
-    private <T, S> void addCreatorPropertyToClassModelBuilder(final ClassModelBuilder<T> classModelBuilder, final String name,
-                                                              final Class<S> clazz) {
-        classModelBuilder.addProperty(createPropertyModelBuilder(new PropertyMetadata<S>(name, classModelBuilder.getType().getSimpleName(),
-                TypeData.builder(clazz).build())).readName(null).writeName(name));
+    private <T, S> PropertyModelBuilder<S> addCreatorPropertyToClassModelBuilder(final ClassModelBuilder<T> classModelBuilder,
+                                                                                 final String name,
+                                                                                 final Class<S> clazz) {
+        PropertyModelBuilder<S> propertyModelBuilder = createPropertyModelBuilder(new PropertyMetadata<S>(name,
+            classModelBuilder.getType().getSimpleName(), TypeData.builder(clazz).build())).readName(null).writeName(name);
+        classModelBuilder.addProperty(propertyModelBuilder);
+        return propertyModelBuilder;
     }
 
     private void cleanPropertyBuilders(final ClassModelBuilder<?> classModelBuilder) {
