@@ -188,14 +188,14 @@ final class ConventionAnnotationImpl implements Convention {
                     }
                 }
 
-                if (!propertyModelBuilder.getTypeData().isAssignableFrom(parameterType)) {
-                    throw creatorExecutable.getError(clazz, format("Invalid Property type for '%s'. Expected %s, found %s.",
-                        propertyModelBuilder.getWriteName(), propertyModelBuilder.getTypeData().getType(), parameterType));
-                } else {
+                if (parameterType.isAssignableFrom(propertyModelBuilder.getTypeData().getType())) {
                     // The existing getter for this field returns a more specific type than what the constructor accepts
                     // This is typical when the getter returns a specific subtype, but the constructor accepts a more
                     // general one (e.g.: getter returns ImmutableList<T>, while constructor just accepts List<T>)
-                    propertyModelBuilder.typeData(newTypeData(genericType, parameterType));
+                    ((PropertyModelBuilder<Object>)propertyModelBuilder).typeData(newTypeData(genericType, parameterType));
+                } else if (!propertyModelBuilder.getTypeData().isAssignableFrom(parameterType)) {
+                    throw creatorExecutable.getError(clazz, format("Invalid Property type for '%s'. Expected %s, found %s.",
+                        propertyModelBuilder.getWriteName(), propertyModelBuilder.getTypeData().getType(), parameterType));
                 }
             }
             classModelBuilder.instanceCreatorFactory(new InstanceCreatorFactoryImpl<T>(creatorExecutable));
