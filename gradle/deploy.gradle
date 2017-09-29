@@ -63,4 +63,10 @@ configure(subprojects - project(':util')) {
         }
     }
 
+    nexus {
+      sign = false
+      repositoryUrl = 'http://artifactory.internal.corp.deal.com/repository/maven-releases/'
+      snapshotRepositoryUrl = 'http://artifactory.internal.corp.deal.com/repository/maven-snapshots/'
+    }
+
 }
