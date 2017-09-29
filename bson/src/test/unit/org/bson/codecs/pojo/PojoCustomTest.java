@@ -16,6 +16,7 @@
 
 package org.bson.codecs.pojo;
 
+import com.google.common.base.Optional;
 import org.bson.codecs.configuration.CodecConfigurationException;
 import org.bson.codecs.configuration.CodecRegistry;
 import org.bson.codecs.pojo.entities.AsymmetricalCreatorModel;
@@ -25,9 +26,11 @@ import org.bson.codecs.pojo.entities.ConcreteCollectionsModel;
 import org.bson.codecs.pojo.entities.ConstructorNotPublicModel;
 import org.bson.codecs.pojo.entities.ConventionModel;
 import org.bson.codecs.pojo.entities.ConverterModel;
+import org.bson.codecs.pojo.entities.CustomPropertyCodecOptionalModel;
 import org.bson.codecs.pojo.entities.GenericTreeModel;
 import org.bson.codecs.pojo.entities.InvalidGetterAndSetterModel;
 import org.bson.codecs.pojo.entities.InvalidSetterArgsModel;
+import org.bson.codecs.pojo.entities.OptionalPropertyCodecProviderForTest;
 import org.bson.codecs.pojo.entities.PrimitivesModel;
 import org.bson.codecs.pojo.entities.SimpleEnum;
 import org.bson.codecs.pojo.entities.SimpleEnumModel;
@@ -52,7 +55,6 @@ import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 import static org.bson.codecs.pojo.Conventions.NO_CONVENTIONS;
 
 public final class PojoCustomTest extends PojoTestCase {
-
     @Test
     public void testRegisterClassModelPreferredOverClass() {
         ClassModel<SimpleModel> classModel = ClassModel.builder(SimpleModel.class).enableDiscriminator(true).build();
@@ -246,6 +248,26 @@ public final class PojoCustomTest extends PojoTestCase {
         model.setIntegerField(null);
 
         decodesTo(getCodec(SimpleModel.class), "{'_t': 'SimpleModel', 'stringField': 'myString'}", model);
+    }
+
+    @Test
+    public void testCustomRegisteredPropertyCodecWithValue() {
+        CustomPropertyCodecOptionalModel model = new CustomPropertyCodecOptionalModel(Optional.of("foo"));
+        ClassModelBuilder<CustomPropertyCodecOptionalModel> classModel =
+                ClassModel.builder(CustomPropertyCodecOptionalModel.class);
+
+        roundTrip(getPojoCodecProviderBuilder(classModel).register(new OptionalPropertyCodecProviderForTest()), model,
+                "{'optionalField': 'foo'}");
+    }
+
+    @Test
+    public void testCustomRegisteredPropertyCodecOmittedValue() {
+        CustomPropertyCodecOptionalModel model = new CustomPropertyCodecOptionalModel(Optional.<String>absent());
+        ClassModelBuilder<CustomPropertyCodecOptionalModel> classModel =
+                ClassModel.builder(CustomPropertyCodecOptionalModel.class);
+
+        roundTrip(getPojoCodecProviderBuilder(classModel).register(new OptionalPropertyCodecProviderForTest()), model,
+                "{'optionalField': null}");
     }
 
     @Test(expected = CodecConfigurationException.class)

@@ -33,7 +33,7 @@ import static org.bson.assertions.Assertions.notNull;
 import static org.bson.codecs.pojo.PropertyReflectionUtils.isGetter;
 
 
-final class TypeData<T> {
+final class TypeData<T> implements TypeWithTypeParameters<T> {
     private final Class<T> type;
     private final List<TypeData<?>> typeParameters;
 
@@ -90,6 +90,7 @@ final class TypeData<T> {
     /**
      * @return the class this {@code ClassTypeData} represents
      */
+    @Override
     public Class<T> getType() {
         return type;
     }
@@ -97,6 +98,7 @@ final class TypeData<T> {
     /**
      * @return the type parameters for the class
      */
+    @Override
     public List<TypeData<?>> getTypeParameters() {
         return typeParameters;
     }
